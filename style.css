@@ -1,0 +1,19 @@
+.container-bg {
+    background-color: #111111;
+    padding: 12px;
+    border-radius: 10px;
+}
+
+/* Button style */
+button.my-button {
+    background-color: #0000FF;
+    color: white;
+    border-radius: 8px;
+    padding: 6px 12px;
+}
+checkbutton.my-checkbox {
+    background-color: #2222FF;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
