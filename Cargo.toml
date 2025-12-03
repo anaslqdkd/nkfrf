@@ -13,4 +13,5 @@ tokio = { version = "1", features = ["full"] }
 zbus = "4"
 zbus_macros = "4"
 notify-rust = "4.11.7"
+crossbeam-channel = "0.5"
 

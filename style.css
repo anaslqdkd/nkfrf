@@ -1,7 +1,10 @@
 .container-bg {
     background-color: #111111;
     padding: 12px;
-    border-radius: 10px;
+    /* border-radius: 10px; */
+}
+.white-label {
+    color: white;
 }
 
 /* Button style */
