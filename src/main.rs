@@ -1,5 +1,9 @@
+use std::cell::RefCell;
 use std::future::pending;
 use std::rc::Rc;
+use notify_rust::Notification;
+use std::collections::VecDeque;
+use pango;
 
 use gtk4::ffi::gtk_label_new;
 use gtk4::gdk::Display;
@@ -9,11 +13,14 @@ use glib::{timeout_add_local, MainContext, Priority};
 // use zbus::blocking::connection;
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 use zbus::{connection, interface, zvariant};
+use lipsum::lipsum;
 
 struct NotificationService {
     count: u64,
     sender: glib::Sender<NotificationData>,
 }
+
+#[derive(Debug)]
 struct NotificationData {
     summary: String,
     body: String,
@@ -50,16 +57,40 @@ fn show_notification_popup(summary: &str, body: &str, window: Rc<ApplicationWind
     println!("the notif is {}, {}", summary, body);
     let label = Label::new(Some(body));
     label.add_css_class("white-label");
+    label.set_wrap_mode(pango::WrapMode::WordChar);
+    label.set_wrap(true); // Enable wrapping
+    label.set_max_width_chars(40);
+    label.set_xalign(0.0);
+    label.set_yalign(0.0);
     if let Some(container) = window.child(){
         if let Some(box_container) = container.downcast_ref::<gtk4::Box>() {
+            while let Some(child) = box_container.first_child() {
+                box_container.remove(&child);
+            }
             box_container.append(&label);
         }
     }
     window.present();
-    timeout_add_local(std::time::Duration::from_secs(10), move || {
-        window.hide();
-        glib::ControlFlow::Continue
+    glib::MainContext::default().spawn_local({
+        let window = window.clone();
+        async move {
+            window.show(); 
+            glib::timeout_future(std::time::Duration::from_secs(10)).await;
+            window.hide(); 
+        }
     });
+
+    // timeout_add_local(std::time::Duration::from_secs(10), {
+    //     let window = window.clone();
+    //     move || {
+    //         window.hide();
+    //         glib::ControlFlow::Break
+    //     }
+    // });
+    // timeout_add_local(std::time::Duration::from_secs(10), move || {
+    //     window.hide();
+    //     glib::ControlFlow::Continue
+    // });
 
 }
 #[tokio::main] 
@@ -68,13 +99,16 @@ async fn main() {
 		Some("com.example.asyncgtk"),
 		Default::default(),
 	);
+    // let mut deque: VecDeque<NotificationData> = VecDeque::new();
 
 	app.connect_activate(|app| {
+        let queue = Rc::new(RefCell::new(VecDeque::<NotificationData>::new()));
+        let queue_for_receiver = queue.clone();
 		let window = Rc::new(ApplicationWindow::builder()
 			.application(app)
 			.title("Async GTK Example")
-			// .default_width(300)
-			// .default_height(100)
+			.default_width(300)
+			.default_height(100)
 			.build());
         window.init_layer_shell();
         window.set_layer(Layer::Overlay);
@@ -100,20 +134,19 @@ async fn main() {
         let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
         container.add_css_class("container-bg");
 
-        // let button = Button::with_label("Idk");
-        // button.add_css_class("my-button");
-        // button.remove_css_class("text-button");
 
         window.set_child(Some(&container));
 
         window.set_margin(Edge::Right, 40);
         window.set_margin(Edge::Top, 20);
-        window.show();
+        // window.show();
         // NOTE: deprecated but works
         let (sender, receiver) = glib::MainContext::channel::<NotificationData>(glib::Priority::DEFAULT);
         receiver.attach(None, move |notification| {
             let win_clone = window.clone();
-            show_notification_popup(&notification.summary, &notification.body, win_clone);
+            queue_for_receiver.borrow_mut().push_back(notification);
+            println!("Queue: {:?}", queue_for_receiver.borrow());
+            // show_notification_popup(&notification.summary, &notification.body, win_clone);
             glib::ControlFlow::Continue
         });
 
@@ -129,11 +162,13 @@ async fn main() {
                 .serve_at("/org/freedesktop/Notifications", greeter).expect("Pb servve at")
                 .build()
                 .await;
+
+            // show_notification_popup("Server Status", "Notification server is up and running.", window.clone());
             pending::<()>().await;
             // Ok(())
 		});
-	});
 
+    });
 	app.run();
 }
 

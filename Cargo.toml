@@ -14,4 +14,6 @@ zbus = "4"
 zbus_macros = "4"
 notify-rust = "4.11.7"
 crossbeam-channel = "0.5"
+pango = "0.21.5"
+lipsum = "0.9.1"
 

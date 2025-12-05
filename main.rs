@@ -8,6 +8,7 @@ use gtk4_layer_shell::{Edge, Layer, LayerShell};
 use serde_json::Value;
 use zbus::{Connection, fdo};
 use zbus::zvariant::OwnedValue;
+use lipsum::lipsum;
 
 fn activate(application: &gtk::Application) {
     let window = gtk::ApplicationWindow::new(application);
