@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::future::pending;
 use std::rc::Rc;
 use notify_rust::Notification;
@@ -20,7 +20,7 @@ struct NotificationService {
     sender: glib::Sender<NotificationData>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct NotificationData {
     summary: String,
     body: String,
@@ -53,7 +53,7 @@ impl NotificationService {
         1
     }
 }
-fn show_notification_popup(summary: &str, body: &str, window: Rc<ApplicationWindow>){
+fn show_notification_popup(summary: &str, body: &str, window: Rc<ApplicationWindow>, is_showing: Rc<Cell<bool>>){
     println!("the notif is {}, {}", summary, body);
     let label = Label::new(Some(body));
     label.add_css_class("white-label");
@@ -77,6 +77,7 @@ fn show_notification_popup(summary: &str, body: &str, window: Rc<ApplicationWind
             window.show(); 
             glib::timeout_future(std::time::Duration::from_secs(10)).await;
             window.hide(); 
+            is_showing.set(false);
         }
     });
 
@@ -142,11 +143,19 @@ async fn main() {
         // window.show();
         // NOTE: deprecated but works
         let (sender, receiver) = glib::MainContext::channel::<NotificationData>(glib::Priority::DEFAULT);
+        let is_showing = Rc::new(Cell::new(false));
+        let is_showing_clone = is_showing.clone();
         receiver.attach(None, move |notification| {
             let win_clone = window.clone();
-            queue_for_receiver.borrow_mut().push_back(notification);
-            println!("Queue: {:?}", queue_for_receiver.borrow());
-            // show_notification_popup(&notification.summary, &notification.body, win_clone);
+            queue_for_receiver.borrow_mut().push_back(notification.clone());
+            // println!("Queue: {:?}", queue_for_receiver.borrow());
+            if !is_showing_clone.get() {
+                println!("The notification is showing");
+                is_showing_clone.set(true);
+                if let Some(notification_) = queue_for_receiver.borrow_mut().pop_front(){
+                    show_notification_popup(&notification_.summary, &notification.body, win_clone, is_showing_clone.clone());
+                }
+            }
             glib::ControlFlow::Continue
         });
 
