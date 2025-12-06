@@ -127,8 +127,8 @@ fn show_notification_popup( queue: &Rc<RefCell<VecDeque<NotificationData>>>, is_
         window.show();
         // TODO: spaw windows until there is notification and until there are items in the queue
         // TODO: implement critical/normal priorities
-        let window2 = draw_window(summary, body, app, 70);
-        window2.show();
+        // let window2 = draw_window(summary, body, app, 70);
+        // window2.show();
         let queue = queue.clone();
         let window = window.clone();
         let is_showing = is_showing.clone();
