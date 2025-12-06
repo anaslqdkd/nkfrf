@@ -20,6 +20,7 @@ struct NotificationService {
     count: u64,
     sender: glib::Sender<NotificationData>,
 }
+// TODO: send the notification not after the other one disappeared but after a certain time
 
 #[derive(Debug, Clone)]
 struct NotificationData {
@@ -60,19 +61,25 @@ fn show_notification_popup( queue: &Rc<RefCell<VecDeque<NotificationData>>>, win
         is_showing.set(true);
         let summary: &str = &notification.summary;
         let body: &str = &notification.body;
-        let label = Label::new(Some(body));
-        label.add_css_class("white-label");
-        label.set_wrap_mode(pango::WrapMode::WordChar);
-        label.set_wrap(true); 
-        label.set_max_width_chars(40);
-        label.set_xalign(0.0);
-        label.set_yalign(0.0);
+        let label_body = Label::new(Some(body));
+        let label_summary = Label::new(Some(summary));
+        label_body.add_css_class("label-body");
+        label_body.set_wrap_mode(pango::WrapMode::WordChar);
+        label_body.set_wrap(true); 
+        label_body.set_max_width_chars(40);
+        label_body.set_xalign(0.0);
+        label_body.set_yalign(0.0);
+        label_summary.set_xalign(0.0);
+        label_summary.set_yalign(0.0);
+
+        label_summary.add_css_class("label-summary");
         if let Some(container) = window.child(){
             if let Some(box_container) = container.downcast_ref::<gtk4::Box>() {
                 while let Some(child) = box_container.first_child() {
                     box_container.remove(&child);
                 }
-                box_container.append(&label);
+                box_container.append(&label_summary);
+                box_container.append(&label_body);
             }
         }
         window.present();
@@ -119,6 +126,7 @@ async fn main() {
             (Edge::Top, true),
             (Edge::Bottom, false),
         ];
+        // FIXME: create windows in the show_popup_function instead of modifing it
         for (anchor, state) in anchors {
             window.set_anchor(anchor, state);
         }
