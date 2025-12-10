@@ -16,4 +16,6 @@ notify-rust = "4.11.7"
 crossbeam-channel = "0.5"
 pango = "0.21.5"
 lipsum = "0.9.1"
-
+arg = "0.4.1"
+clap = {version = "4.5.53", features = ["derive"] }
+anyhow = "1.0.100"
