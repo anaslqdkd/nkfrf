@@ -1,7 +1,10 @@
 use anyhow::Ok;
+use dbus::ServerRequestItem;
+use gtk4::subclass::window;
 use gtk4::{Application, ApplicationWindow};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::cell::{Cell, RefCell};
+use std::future::pending;
 use std::rc::Rc;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, proxy};
@@ -12,6 +15,7 @@ use gtk4::{prelude::*, Button, CssProvider, Label, STYLE_PROVIDER_PRIORITY_APPLI
 use glib::{timeout_add_local, ControlFlow, MainContext, Priority};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 mod dbus;
+mod dbus_client;
 
 const TOP_MARGIN: i32 = 20;
 const WINDOW_HEIGHT: i32 = 70;
@@ -143,19 +147,16 @@ fn draw_window (summary: &str, body: &str, app: &Application, stack_number: i32)
 
 }
 
-fn show_nc() -> Result<(), anyhow::Error>{
-    println!("Launched with the show option");
-    Ok(())
-}
-
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let (sender, receiver) = glib::MainContext::channel::<dbus::NotificationData>(glib::Priority::DEFAULT);
+    let (request_sender, request_receiver) = glib::MainContext::channel::<dbus::ServerRequestItem>(glib::Priority::DEFAULT);
 
     tokio::spawn(async move {
-        dbus::run(sender).await.unwrap();
+        dbus::run(sender, request_sender).await.unwrap();
     });
+    let dbus_client_ = dbus_client::DbusClient::init().await.expect("buu");
     let cli = Cli::parse();
     let app = Application::new(
         Some("com.example.asyncgtk"),
@@ -169,8 +170,9 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if let Some(cmd) = &cli.command {
         match cmd {
-            Commands::Show => show_nc()?,
-        }
+            // Commands::Show => show_nc()?,
+            Commands::Show => dbus_client_.show_nc().await?,
+        };
     } 
 
     let app_clone = app.clone();
@@ -184,9 +186,51 @@ async fn main() -> Result<(), anyhow::Error> {
         show_notification_popup(&queue, &app_clone, &active_notifications, &active_windows);
         glib::ControlFlow::Continue
     });
+    let app_ = app.clone();
+    request_receiver.attach(None, move |server_request_item| {
+        println!("The receiver received something");
+        match server_request_item {
+            ServerRequestItem::OpenNC => {Some(test(&app_));
+                glib::ControlFlow::Continue
+            }
+        }
+    });
 
     
     app.run();
 
+    Ok(())
+}
+fn test(app: &Application) -> Result<(), anyhow::Error>{
+    // TODO: continue this function
+    let window = ApplicationWindow::builder().application(app).build();
+    window.init_layer_shell();
+    window.set_layer(Layer::Overlay);
+    window.set_default_size(300, 600);
+    window.set_opacity(0.5);
+    let anchors = [
+        (Edge::Left, false),
+        (Edge::Right, true),
+        (Edge::Top, true),
+        (Edge::Bottom, false),
+    ];
+    for (anchor, state) in anchors {
+        window.set_anchor(anchor, state);
+    }
+    window.set_margin(Edge::Right, 20);
+    window.set_margin(Edge::Top, 20);
+    let provider = CssProvider::new();
+    provider.load_from_path("style.css");
+    let display = Display::default().expect("Could not connect to display");
+    gtk4::style_context_add_provider_for_display(
+        &display,
+        &provider,
+        STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    container.add_css_class("nc-bg");
+    window.set_child(Some(&container));
+    window.show();
+    println!("++++");
     Ok(())
 }

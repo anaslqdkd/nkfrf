@@ -1,7 +1,11 @@
 use std::future::pending;
+use std::rc::Rc;
+use std::time::Duration;
 
+// use zbus::blocking::Connection;
+use zbus::Connection;
 use zbus::zvariant::{OwnedValue, Value};
-use zbus::{connection, interface, zvariant};
+use zbus::{connection, interface, zvariant, Proxy};
 #[derive(Debug, Clone)]
 pub struct Hints {
     pub urgency: u8,
@@ -16,9 +20,14 @@ pub struct NotificationData {
     pub expire_timeout: i32,
 }
 #[derive(Debug, Clone)]
+pub enum ServerRequestItem{
+    OpenNC,
+}
+#[derive(Debug, Clone)]
 pub struct NotificationService {
     count: u64,
     sender: glib::Sender<NotificationData>,
+    request_sender: glib::Sender<ServerRequestItem>,
 }
 #[interface(name = "org.freedesktop.Notifications")]
 impl NotificationService {
@@ -64,13 +73,16 @@ impl NotificationService {
         self.sender.send(notification).expect("Pb with the send notif");
         1
     }
-    pub async fn show_nc(&self){
-        println!("The interface executed the show nc");
+    async fn show_nc(&self) -> zbus::fdo::Result<()> {
+        println!("$$$$");
+        self.request_sender.send(ServerRequestItem::OpenNC).unwrap();
+        Ok(())
     }
 }
-pub async fn run(sender: glib::Sender<NotificationData>) -> anyhow::Result<()> {
+pub async fn run(sender: glib::Sender<NotificationData>, request_sender: glib::Sender<ServerRequestItem> ) -> anyhow::Result<()> {
     println!("Done!");
-    let greeter = NotificationService {count:0, sender};
+
+    let greeter = NotificationService {count:0, sender, request_sender };
     let _conn = connection::Builder::session().expect("Pb here")
         .name("org.freedesktop.Notifications").expect("Pb name")
         .serve_at("/org/freedesktop/Notifications", greeter).expect("Pb servve at")

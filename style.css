@@ -27,3 +27,8 @@ checkbutton.my-checkbox {
     padding: 4px 8px;
     border-radius: 6px;
 }
+
+.nc-bg {
+    background-color: red;
+    padding: 12px;
+}
