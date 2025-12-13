@@ -3,6 +3,7 @@ use dbus::ServerRequestItem;
 use gtk4::subclass::window;
 use gtk4::{Application, ApplicationWindow};
 use clap::{Parser, Subcommand, ValueEnum};
+use notification_store::NotificationEvent;
 use std::cell::{Cell, RefCell};
 use std::future::pending;
 use std::rc::Rc;
@@ -16,6 +17,7 @@ use glib::{timeout_add_local, ControlFlow, MainContext, Priority};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
 mod dbus;
 mod dbus_client;
+mod notification_store;
 
 const TOP_MARGIN: i32 = 20;
 const WINDOW_HEIGHT: i32 = 70;
@@ -33,6 +35,7 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     Show,
+    Close,
 }
 // TODO: implement critical/normal priorities
 
@@ -152,16 +155,23 @@ fn draw_window (summary: &str, body: &str, app: &Application, stack_number: i32)
 async fn main() -> Result<(), anyhow::Error> {
     let (sender, receiver) = glib::MainContext::channel::<dbus::NotificationData>(glib::Priority::DEFAULT);
     let (request_sender, request_receiver) = glib::MainContext::channel::<dbus::ServerRequestItem>(glib::Priority::DEFAULT);
-
-    tokio::spawn(async move {
-        dbus::run(sender, request_sender).await.unwrap();
-    });
-    let dbus_client_ = dbus_client::DbusClient::init().await.expect("buu");
-    let cli = Cli::parse();
+    let (notification_event_sender, request_event_receiver) = glib::MainContext::channel::<notification_store::NotificationEvent>(glib::Priority::DEFAULT);
+    let (notification_sender, notification_receiver) = glib::MainContext::channel::<dbus::NotificationData>(glib::Priority::DEFAULT);
     let app = Application::new(
         Some("com.example.asyncgtk"),
         Default::default(),
     );
+    gtk4::init()?;
+    let nc_window = init_nc_window(&app).unwrap();
+    let mut notification_center = notification_store::NotificationCenter::new(request_event_receiver, notification_receiver, nc_window);
+    notification_center.attach_receiver();
+
+    tokio::spawn(async move {
+        dbus::run(sender, request_sender, notification_sender).await.unwrap();
+        // TODO: create a notification store object and use methods to add the notifications each time directly from main
+    });
+    let dbus_client_ = dbus_client::DbusClient::init().await.expect("buu");
+    let cli = Cli::parse();
     app.connect_activate(move |app| {
         let window = ApplicationWindow::builder().application(app).build();
         window.hide();
@@ -170,10 +180,11 @@ async fn main() -> Result<(), anyhow::Error> {
 
     if let Some(cmd) = &cli.command {
         match cmd {
-            // Commands::Show => show_nc()?,
             Commands::Show => dbus_client_.show_nc().await?,
+            Commands::Close => dbus_client_.close_nc().await?,
         };
     } 
+    // TODO: implement ids for notifications instead 
 
     let app_clone = app.clone();
     let queue = Rc::new(RefCell::new(VecDeque::<dbus::NotificationData>::new()));
@@ -186,23 +197,25 @@ async fn main() -> Result<(), anyhow::Error> {
         show_notification_popup(&queue, &app_clone, &active_notifications, &active_windows);
         glib::ControlFlow::Continue
     });
-    let app_ = app.clone();
     request_receiver.attach(None, move |server_request_item| {
         println!("The receiver received something");
-        match server_request_item {
-            ServerRequestItem::OpenNC => {Some(test(&app_));
-                glib::ControlFlow::Continue
+        match server_request_item{
+
+            ServerRequestItem::OpenNC => {notification_event_sender.send(NotificationEvent::ShowNotificationCenter).unwrap();
+                ControlFlow::Continue
+            }
+            ServerRequestItem::CloseNC => {notification_event_sender.send(NotificationEvent::ShowNotificationCenter).unwrap();
+                ControlFlow::Continue
             }
         }
-    });
+        });
 
     
     app.run();
 
     Ok(())
 }
-fn test(app: &Application) -> Result<(), anyhow::Error>{
-    // TODO: continue this function
+fn init_nc_window(app: &Application) -> Result<ApplicationWindow, anyhow::Error>{
     let window = ApplicationWindow::builder().application(app).build();
     window.init_layer_shell();
     window.set_layer(Layer::Overlay);
@@ -230,7 +243,15 @@ fn test(app: &Application) -> Result<(), anyhow::Error>{
     let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
     container.add_css_class("nc-bg");
     window.set_child(Some(&container));
-    window.show();
+    // window.show();
     println!("++++");
+    Ok(window)
+}
+fn open_nc_ui(window: &ApplicationWindow) -> Result<(), anyhow::Error>{
+    window.show();
+    Ok(())
+}
+fn close_nc_ui(window: &ApplicationWindow) -> Result<(), anyhow::Error>{
+    window.hide();
     Ok(())
 }
