@@ -4,6 +4,12 @@
 	border: 2px solid white;
     /* border-radius: 10px; */
 }
+.notification-container {
+    background-color: #000000;
+    padding: 12px;
+	border: 2px solid white;
+    /* border-radius: 10px; */
+}
 .label-body {
     color: white;
 	font-size: 12px;
@@ -29,6 +35,6 @@ checkbutton.my-checkbox {
 }
 
 .nc-bg {
-    background-color: red;
+    background-color: black;
     padding: 12px;
 }

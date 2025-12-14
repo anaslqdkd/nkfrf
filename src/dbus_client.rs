@@ -23,12 +23,10 @@ impl DbusClient {
         Ok(dbus_client)
     }
     pub async fn show_nc(&self) -> Result<(), anyhow::Error> {
-        println!("in the show nc function in dbus_client");
         self.proxy.call_method("ShowNc", &()).await?;
         Ok(())
     }
     pub async fn close_nc(&self) -> Result<(), anyhow::Error> {
-        println!("in the show nc function in dbus_client");
         self.proxy.call_method("CloseNc", &()).await?;
         Ok(())
     }

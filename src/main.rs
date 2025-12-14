@@ -43,7 +43,6 @@ fn show_notification_popup( queue: &Rc<RefCell<VecDeque<dbus::NotificationData>>
     if *active_notifications.borrow() >= MAX_ACTIVE {
         return;
     }
-    println!("in show notification popup");
     let mut q = queue.borrow_mut();
     if let Some(notification) = q.pop_front(){
         // is_showing.set(true);
@@ -53,8 +52,8 @@ fn show_notification_popup( queue: &Rc<RefCell<VecDeque<dbus::NotificationData>>
         let actions: &Vec<String> = &notification.actions;
         let expire_timeout: i32 = notification.expire_timeout;
         let hints: u8 = notification.hints.urgency;
-        println!("In the if statement with notification {:#?}", notification);
-        println!("actions = {:?}", actions);
+        // println!("In the if statement with notification {:#?}", notification);
+        // println!("actions = {:?}", actions);
         let window = draw_window(summary, body, app, *active_notifications.borrow_mut());
         *active_notifications.borrow_mut() += 1;
         window.show();
@@ -67,8 +66,8 @@ fn show_notification_popup( queue: &Rc<RefCell<VecDeque<dbus::NotificationData>>
         let duration = expire_timeout as u64;
 
         timeout_add_local(std::time::Duration::from_millis(duration), move || {
-            println!("The time is up");
-            println!("Queue: {:?}", queue.borrow());
+            // println!("The time is up");
+            // println!("Queue: {:?}", queue.borrow());
             *active_notifications.borrow_mut() -= 1;
             active_windows.borrow_mut().retain(|w| !w.eq(&window));
             window.hide();
@@ -88,7 +87,6 @@ fn redraw_windows(windows: &WindowList) {
     }
 }
 fn draw_window (summary: &str, body: &str, app: &Application, stack_number: i32) -> ApplicationWindow{
-    println!("in the draw window function");
     let window = ApplicationWindow::builder()
         .application(app)
         .title("Async GTK Example")
@@ -192,19 +190,17 @@ async fn main() -> Result<(), anyhow::Error> {
     let active_windows: WindowList = Rc::new(RefCell::new(Vec::new()));
     let active_windows = active_windows.clone();
     receiver.attach(None, move |notification| {
-        println!("in the receiver attach");
         queue.borrow_mut().push_back(notification.clone());
         show_notification_popup(&queue, &app_clone, &active_notifications, &active_windows);
         glib::ControlFlow::Continue
     });
     request_receiver.attach(None, move |server_request_item| {
-        println!("The receiver received something");
         match server_request_item{
 
             ServerRequestItem::OpenNC => {notification_event_sender.send(NotificationEvent::ShowNotificationCenter).unwrap();
                 ControlFlow::Continue
             }
-            ServerRequestItem::CloseNC => {notification_event_sender.send(NotificationEvent::ShowNotificationCenter).unwrap();
+            ServerRequestItem::CloseNC => {notification_event_sender.send(NotificationEvent::CloseNotificationCenter).unwrap();
                 ControlFlow::Continue
             }
         }
@@ -244,7 +240,6 @@ fn init_nc_window(app: &Application) -> Result<ApplicationWindow, anyhow::Error>
     container.add_css_class("nc-bg");
     window.set_child(Some(&container));
     // window.show();
-    println!("++++");
     Ok(window)
 }
 fn open_nc_ui(window: &ApplicationWindow) -> Result<(), anyhow::Error>{
