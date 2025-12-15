@@ -7,7 +7,7 @@ use std::time::Duration;
 // use zbus::blocking::Connection;
 use zbus::Connection;
 use zbus::zvariant::{OwnedValue, Value};
-use zbus::{connection, interface, zvariant, Proxy};
+use zbus::{Proxy, connection, interface, zvariant};
 #[derive(Debug, Clone)]
 pub struct Hints {
     pub urgency: u8,
@@ -23,7 +23,7 @@ pub struct NotificationData {
     pub id: u32,
 }
 #[derive(Debug, Clone)]
-pub enum ServerRequestItem{
+pub enum ServerRequestItem {
     OpenNC,
     CloseNC,
 }
@@ -41,19 +41,23 @@ impl NotificationService {
     fn say_hello(&mut self, name: &str) -> String {
         self.count += 1;
         format!("Hello {}! I have been called {} times.", name, self.count)
-        
     }
     fn get_server_information(&self) -> (&str, &str, &str, &str) {
-        (
-            "NotifDaemon", 
-            "Me",          
-            "0.0",         
-            "0.0",         
-        )
+        ("NotifDaemon", "Me", "0.0", "0.0")
     }
-    fn notify( &mut self, app_name: &str, replaces_id: u32, app_icon: &str, summary: &str, body: &str, actions: Vec<String>, hints: std::collections::HashMap<String, zvariant::Value>, expire_timeout: i32,) -> u32 {
+    fn notify(
+        &mut self,
+        app_name: &str,
+        replaces_id: u32,
+        app_icon: &str,
+        summary: &str,
+        body: &str,
+        actions: Vec<String>,
+        hints: std::collections::HashMap<String, zvariant::Value>,
+        expire_timeout: i32,
+    ) -> u32 {
         // println!("the notification is app_name {}, body {}, app_icon {}, actions {:#?} hints {:#?}, expire_timeout", app_name, body, app_icon, hints, expire_timeout);
-        // FIXME: use replace_id when needed 
+        // FIXME: use replace_id when needed
         let id = self.next_id;
         self.next_id += 1;
         let summary = summary.to_string();
@@ -62,11 +66,11 @@ impl NotificationService {
         let hints_struct = Hints {
             urgency: match hints.get("urgency") {
                 Some(Value::U8(u)) => *u,
-                _ => 1, 
+                _ => 1,
             },
         };
         let mut duration = 5000;
-        if expire_timeout != -1{
+        if expire_timeout != -1 {
             duration = expire_timeout;
         }
 
@@ -80,10 +84,12 @@ impl NotificationService {
             id: id,
         };
         self.notifications.insert(id, notification.clone());
-        println!("the hints are: {:#?}", hints);
+        // println!("the hints are: {:#?}", hints);
         println!("the replaces_id is {}", replaces_id);
         let notification_ = notification.clone();
-        self.sender.send(notification).expect("Pb with the send notif");
+        self.sender
+            .send(notification)
+            .expect("Pb with the send notif");
         self.notification_sender.send(notification_).unwrap();
         id
     }
@@ -92,31 +98,48 @@ impl NotificationService {
         Ok(())
     }
     async fn close_nc(&self) -> zbus::fdo::Result<()> {
-        self.request_sender.send(ServerRequestItem::CloseNC).unwrap();
+        self.request_sender
+            .send(ServerRequestItem::CloseNC)
+            .unwrap();
         Ok(())
     }
 }
-pub async fn run(sender: glib::Sender<NotificationData>, request_sender: glib::Sender<ServerRequestItem>, notification_sender: glib::Sender<NotificationData>) -> anyhow::Result<()> {
+pub async fn run(
+    sender: glib::Sender<NotificationData>,
+    request_sender: glib::Sender<ServerRequestItem>,
+    notification_sender: glib::Sender<NotificationData>,
+) -> anyhow::Result<()> {
     println!("Done!");
 
-    let notifications = HashMap::new(); 
+    let notifications = HashMap::new();
     let next_id = 1;
 
     let greeter = NotificationService {
-        count:0,
+        count: 0,
         next_id: next_id,
         notifications: notifications,
         sender: sender,
         request_sender: request_sender,
-        notification_sender: notification_sender
+        notification_sender: notification_sender,
     };
-    let _conn = connection::Builder::session().expect("Pb here")
-        .name("org.freedesktop.Notifications").expect("Pb name")
-        .serve_at("/org/freedesktop/Notifications", greeter).expect("Pb servve at")
+    let _conn = connection::Builder::session()
+        .expect("Pb here")
+        .name("org.freedesktop.Notifications")
+        .expect("Pb name")
+        .serve_at("/org/freedesktop/Notifications", greeter)
+        .expect("Pb servve at")
         .build()
         .await;
 
     pending::<()>().await;
     Ok(())
-
 }
+// User clicks notification
+//         ↓
+// GTK sends Close(id) request
+//         ↓
+// Daemon removes notification from HashMap
+//         ↓
+// Daemon emits Removed(id)
+//         ↓
+// GTK removes widget

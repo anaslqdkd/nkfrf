@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use anyhow::Error;
-use zbus::{interface, zvariant, Message, Proxy};
 use zbus::Connection;
+use zbus::{Message, Proxy, interface, zvariant};
 
 pub struct DbusClient {
     proxy: Proxy<'static>,
@@ -16,10 +16,9 @@ impl DbusClient {
             "org.freedesktop.Notifications",
             "/org/freedesktop/Notifications",
             "org.freedesktop.Notifications",
-        ).await?;
-        let dbus_client = Self {
-            proxy: proxy
-        };
+        )
+        .await?;
+        let dbus_client = Self { proxy: proxy };
         Ok(dbus_client)
     }
     pub async fn show_nc(&self) -> Result<(), anyhow::Error> {
@@ -30,6 +29,4 @@ impl DbusClient {
         self.proxy.call_method("CloseNc", &()).await?;
         Ok(())
     }
-
 }
-
