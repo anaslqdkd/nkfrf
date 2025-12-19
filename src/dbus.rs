@@ -27,6 +27,7 @@ pub enum ServerRequestItem {
     OpenNC,
     CloseNC,
 }
+// TODO: implement icons from notifications
 #[derive(Debug, Clone)]
 pub struct NotificationService {
     count: u64,
@@ -75,16 +76,17 @@ impl NotificationService {
         }
 
         let notification = NotificationData {
-            summary: summary,
-            body: body,
-            icon: icon,
-            actions: actions,
+            summary,
+            body,
+            icon,
+            actions,
             expire_timeout: duration,
             hints: hints_struct,
-            id: id,
+            id,
         };
         self.notifications.insert(id, notification.clone());
         // println!("the hints are: {:#?}", hints);
+        println!("hint keys: {:?}", hints.keys().collect::<Vec<_>>());
         println!("the replaces_id is {}", replaces_id);
         let notification_ = notification.clone();
         self.sender
@@ -116,11 +118,11 @@ pub async fn run(
 
     let greeter = NotificationService {
         count: 0,
-        next_id: next_id,
-        notifications: notifications,
-        sender: sender,
-        request_sender: request_sender,
-        notification_sender: notification_sender,
+        next_id,
+        notifications,
+        sender,
+        request_sender,
+        notification_sender,
     };
     let _conn = connection::Builder::session()
         .expect("Pb here")
@@ -134,12 +136,3 @@ pub async fn run(
     pending::<()>().await;
     Ok(())
 }
-// User clicks notification
-//         ↓
-// GTK sends Close(id) request
-//         ↓
-// Daemon removes notification from HashMap
-//         ↓
-// Daemon emits Removed(id)
-//         ↓
-// GTK removes widget

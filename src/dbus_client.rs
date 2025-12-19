@@ -18,7 +18,7 @@ impl DbusClient {
             "org.freedesktop.Notifications",
         )
         .await?;
-        let dbus_client = Self { proxy: proxy };
+        let dbus_client = Self { proxy };
         Ok(dbus_client)
     }
     pub async fn show_nc(&self) -> Result<(), anyhow::Error> {

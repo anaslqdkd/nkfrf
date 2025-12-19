@@ -1,7 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, ops::ControlFlow, rc::Rc};
 
 use gtk4::{
-    ApplicationWindow, Label,
+    // ApplicationWindow, Label,
+    ApplicationWindow,
+    Label,
     glib::object::Cast,
     prelude::{BoxExt, GtkWindowExt, WidgetExt},
     subclass::window,
@@ -19,7 +21,7 @@ pub struct WindowMethods {
 }
 impl WindowMethods {
     pub fn new(window: ApplicationWindow) -> Self {
-        Self { window: window }
+        Self { window }
     }
     pub fn show_window(&mut self) {
         self.window.show();
@@ -42,8 +44,8 @@ impl NotificationCenter {
     ) -> Self {
         Self {
             window_methods: WindowMethods::new(window),
-            receiver: receiver,
-            notification_receiver: notification_receiver,
+            receiver,
+            notification_receiver,
             notifications: Rc::new(RefCell::new(HashMap::new())),
         }
     }
@@ -79,36 +81,40 @@ pub fn add_notification(
     notifications: Rc<RefCell<HashMap<u32, dbus::NotificationData>>>,
     window: &ApplicationWindow,
 ) {
-    if let Some(container) = window.child() {
-        if let Some(box_container) = container.downcast_ref::<gtk4::Box>() {
-            let notification_container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-            let notification_container_clone = notification_container.clone();
-            let box_container_clone = box_container.clone();
-            notification_container.add_css_class("notification-container");
-            let gesture = gtk4::GestureClick::new();
-            gesture.connect_pressed(move |_gesture, _n_press, _x, _y| {
-                notifications.borrow_mut().remove(&notification.id);
-                box_container_clone.remove(&notification_container_clone);
-                println!("Notification clicked!");
-            });
-            notification_container.add_controller(gesture);
+    let Some(container) = window.child() else {
+        return;
+    };
+    let Some(box_container) = container.downcast_ref::<gtk4::Box>() else {
+        return;
+    };
 
-            let body = notification.body.clone();
-            let summary = notification.summary.clone();
-            let label_body = Label::new(Some(&body));
-            let label_summary = Label::new(Some(&summary));
-            label_body.add_css_class("label-body");
-            label_summary.add_css_class("label-summary");
-            label_body.set_wrap_mode(pango::WrapMode::WordChar);
-            label_body.set_wrap(true);
-            label_body.set_max_width_chars(40);
-            label_body.set_xalign(0.0);
-            label_body.set_yalign(0.0);
-            label_summary.set_xalign(0.0);
-            label_summary.set_yalign(0.0);
-            notification_container.append(&label_body);
-            notification_container.append(&label_summary);
-            box_container.append(&notification_container);
-        }
-    }
+    let notification_container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
+    notification_container.add_css_class("notification-container");
+
+    let gesture = gtk4::GestureClick::new();
+    let notification_id = notification.id;
+    let container_ref = notification_container.clone();
+    let box_ref = box_container.clone();
+    gesture.connect_pressed(move |_gesture, _n_press, _x, _y| {
+        notifications.borrow_mut().remove(&notification_id);
+        box_ref.remove(&container_ref);
+        println!("Notification clicked!");
+    });
+
+    let label_summary = Label::new(Some(&notification.summary));
+    label_summary.add_css_class("label-summary");
+    label_summary.set_xalign(0.0);
+    label_summary.set_yalign(0.0);
+
+    let label_body = Label::new(Some(&notification.body));
+    label_body.add_css_class("label-body");
+    label_body.set_wrap_mode(pango::WrapMode::WordChar);
+    label_body.set_wrap(true);
+    label_body.set_max_width_chars(40);
+    label_body.set_xalign(0.0);
+    label_body.set_yalign(0.0);
+
+    notification_container.append(&label_summary);
+    notification_container.append(&label_body);
+    box_container.append(&notification_container);
 }
