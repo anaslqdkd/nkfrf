@@ -7,7 +7,6 @@ use gtk4::subclass::window;
 use gtk4::{Application, ApplicationWindow};
 use gtk4::{Button, CssProvider, Label, STYLE_PROVIDER_PRIORITY_APPLICATION, prelude::*};
 use gtk4_layer_shell::{Edge, Layer, LayerShell};
-use notification_store::NotificationEvent;
 use pango;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
@@ -15,9 +14,15 @@ use std::future::pending;
 use std::rc::Rc;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, proxy};
+
+use crate::app::App;
+use crate::app_state::{AppState, Message};
+use crate::notification_window::NotificationWindow;
 mod dbus;
 mod dbus_client;
-mod notification_store;
+mod notification_window;
+mod app_state;
+mod app;
 
 const TOP_MARGIN: i32 = 20;
 const WINDOW_HEIGHT: i32 = 70;
@@ -40,8 +45,9 @@ enum Commands {
 // TODO: implement critical/normal priorities
 // TODO: manage dbus app calls ex close
 
+
 fn show_notification_popup(
-    queue: &Rc<RefCell<VecDeque<dbus::NotificationData>>>,
+    queue: &Rc<RefCell<VecDeque<dbus::Notification>>>,
     app: &Application,
     active_notifications: &Rc<RefCell<i32>>,
     active_windows: &WindowList,
@@ -60,9 +66,11 @@ fn show_notification_popup(
         let hints: u8 = notification.hints.urgency;
         // println!("In the if statement with notification {:#?}", notification);
         // println!("actions = {:?}", actions);
-        let window = draw_window(summary, body, app, *active_notifications.borrow_mut());
-        *active_notifications.borrow_mut() += 1;
+        // let window = draw_window(summary, body, app, *active_notifications.borrow_mut());
+        let window = NotificationWindow::new(summary, body).build(app);
         window.show();
+
+        *active_notifications.borrow_mut() += 1;
         active_windows.borrow_mut().push(window.clone());
         let queue = queue.clone();
         let window = window.clone();
@@ -92,104 +100,18 @@ fn redraw_windows(windows: &WindowList) {
         index += 1;
     }
 }
-fn draw_window(
-    summary: &str,
-    body: &str,
-    app: &Application,
-    stack_number: i32,
-) -> ApplicationWindow {
-    let window = ApplicationWindow::builder()
-        .application(app)
-        .title("Async GTK Example")
-        .default_width(300)
-        .default_height(100)
-        .build();
-    window.init_layer_shell();
-    window.set_layer(Layer::Overlay);
-    window.set_default_size(WINDOW_WIDTH, WINDOW_HEIGHT);
-    window.set_opacity(0.95);
-    let anchors = [
-        (Edge::Left, false),
-        (Edge::Right, true),
-        (Edge::Top, true),
-        (Edge::Bottom, false),
-    ];
-    for (anchor, state) in anchors {
-        window.set_anchor(anchor, state);
-    }
-    let provider = CssProvider::new();
-    provider.load_from_path("style.css");
-    let display = Display::default().expect("Could not connect to display");
-    gtk4::style_context_add_provider_for_display(
-        &display,
-        &provider,
-        STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
-    let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    container.add_css_class("container-bg");
-
-    window.set_child(Some(&container));
-
-    let y_offset = stack_number * WINDOW_HEIGHT + TOP_MARGIN;
-    window.set_margin(Edge::Right, 20);
-    window.set_margin(Edge::Top, y_offset);
-    let label_body = Label::new(Some(body));
-    let label_summary = Label::new(Some(summary));
-    label_body.add_css_class("label-body");
-    label_body.set_wrap_mode(pango::WrapMode::WordChar);
-    label_body.set_wrap(true);
-    label_body.set_max_width_chars(40);
-    label_body.set_xalign(0.0);
-    label_body.set_yalign(0.0);
-    label_summary.set_xalign(0.0);
-    label_summary.set_yalign(0.0);
-
-    label_summary.add_css_class("label-summary");
-    if let Some(container) = window.child() {
-        if let Some(box_container) = container.downcast_ref::<gtk4::Box>() {
-            while let Some(child) = box_container.first_child() {
-                box_container.remove(&child);
-            }
-            box_container.append(&label_summary);
-            box_container.append(&label_body);
-            let window_clone = window.clone();
-
-            let gesture = gtk4::GestureClick::new();
-            gesture.connect_pressed(move |_gesture, _n_press, _x, _y| {
-                window_clone.destroy();
-                // TODO: update();
-                // redraw_windows(windows);
-                // notifications.borrow_mut().remove(&notification.id);
-                // box_container_clone.remove(&notification_container_clone);
-
-                println!("Notification clicked!");
-            });
-            box_container.add_controller(gesture);
-        }
-    }
-    window
-}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let (sender, receiver) =
-        glib::MainContext::channel::<dbus::NotificationData>(glib::Priority::DEFAULT);
+        glib::MainContext::channel::<dbus::Notification>(glib::Priority::DEFAULT);
     let (request_sender, request_receiver) =
         glib::MainContext::channel::<dbus::ServerRequestItem>(glib::Priority::DEFAULT);
-    let (notification_event_sender, request_event_receiver) = glib::MainContext::channel::<
-        notification_store::NotificationEvent,
-    >(glib::Priority::DEFAULT);
     let (notification_sender, notification_receiver) =
-        glib::MainContext::channel::<dbus::NotificationData>(glib::Priority::DEFAULT);
+        glib::MainContext::channel::<dbus::Notification>(glib::Priority::DEFAULT);
     let app = Application::new(Some("com.example.asyncgtk"), Default::default());
+    let app_handler = App::new(app.clone());
     gtk4::init()?;
-    let nc_window = init_nc_window(&app).unwrap();
-    let mut notification_center = notification_store::NotificationCenter::new(
-        request_event_receiver,
-        notification_receiver,
-        nc_window,
-    );
-    notification_center.attach_receiver();
 
     tokio::spawn(async move {
         dbus::run(sender, request_sender, notification_sender)
@@ -211,72 +133,24 @@ async fn main() -> Result<(), anyhow::Error> {
         };
     }
     // TODO: implement ids for notifications instead
+    // let mut app_state = AppState::new();
 
     let app_clone = app.clone();
-    let queue = Rc::new(RefCell::new(VecDeque::<dbus::NotificationData>::new()));
+    let queue = Rc::new(RefCell::new(VecDeque::<dbus::Notification>::new()));
     let active_notifications = Rc::new(RefCell::new(0));
     let active_windows: WindowList = Rc::new(RefCell::new(Vec::new()));
     let active_windows = active_windows.clone();
+    let app_handler_clone = app_handler.clone();
     receiver.attach(None, move |notification| {
-        queue.borrow_mut().push_back(notification.clone());
-        show_notification_popup(&queue, &app_clone, &active_notifications, &active_windows);
+        let message = Message::NotificationReceived(notification);
+        app_handler_clone.handle_message(message);
+        // app_state.update(message);
+        // queue.borrow_mut().push_back(notification.clone());
+        // show_notification_popup(&queue, &app_clone, &active_notifications, &active_windows);
         glib::ControlFlow::Continue
-    });
-    request_receiver.attach(None, move |server_request_item| match server_request_item {
-        ServerRequestItem::OpenNC => {
-            notification_event_sender
-                .send(NotificationEvent::ShowNotificationCenter)
-                .unwrap();
-            ControlFlow::Continue
-        }
-        ServerRequestItem::CloseNC => {
-            notification_event_sender
-                .send(NotificationEvent::CloseNotificationCenter)
-                .unwrap();
-            ControlFlow::Continue
-        }
     });
 
     app.run();
 
-    Ok(())
-}
-fn init_nc_window(app: &Application) -> Result<ApplicationWindow, anyhow::Error> {
-    let window = ApplicationWindow::builder().application(app).build();
-    window.init_layer_shell();
-    window.set_layer(Layer::Overlay);
-    window.set_default_size(300, 600);
-    window.set_opacity(0.5);
-    let anchors = [
-        (Edge::Left, false),
-        (Edge::Right, true),
-        (Edge::Top, true),
-        (Edge::Bottom, false),
-    ];
-    for (anchor, state) in anchors {
-        window.set_anchor(anchor, state);
-    }
-    window.set_margin(Edge::Right, 20);
-    window.set_margin(Edge::Top, 20);
-    let provider = CssProvider::new();
-    provider.load_from_path("style.css");
-    let display = Display::default().expect("Could not connect to display");
-    gtk4::style_context_add_provider_for_display(
-        &display,
-        &provider,
-        STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
-    let container = gtk4::Box::new(gtk4::Orientation::Vertical, 0);
-    container.add_css_class("nc-bg");
-    window.set_child(Some(&container));
-    // window.show();
-    Ok(window)
-}
-fn open_nc_ui(window: &ApplicationWindow) -> Result<(), anyhow::Error> {
-    window.show();
-    Ok(())
-}
-fn close_nc_ui(window: &ApplicationWindow) -> Result<(), anyhow::Error> {
-    window.hide();
     Ok(())
 }

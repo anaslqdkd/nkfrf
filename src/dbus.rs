@@ -13,7 +13,7 @@ pub struct Hints {
     pub urgency: u8,
 }
 #[derive(Debug, Clone)]
-pub struct NotificationData {
+pub struct Notification {
     pub summary: String,
     pub body: String,
     pub icon: String,
@@ -32,10 +32,10 @@ pub enum ServerRequestItem {
 pub struct NotificationService {
     count: u64,
     next_id: u32,
-    notifications: HashMap<u32, NotificationData>,
-    sender: glib::Sender<NotificationData>,
+    notifications: HashMap<u32, Notification>,
+    sender: glib::Sender<Notification>,
     request_sender: glib::Sender<ServerRequestItem>,
-    notification_sender: glib::Sender<NotificationData>,
+    notification_sender: glib::Sender<Notification>,
 }
 #[interface(name = "org.freedesktop.Notifications")]
 impl NotificationService {
@@ -75,7 +75,7 @@ impl NotificationService {
             duration = expire_timeout;
         }
 
-        let notification = NotificationData {
+        let notification = Notification {
             summary,
             body,
             icon,
@@ -107,9 +107,9 @@ impl NotificationService {
     }
 }
 pub async fn run(
-    sender: glib::Sender<NotificationData>,
+    sender: glib::Sender<Notification>,
     request_sender: glib::Sender<ServerRequestItem>,
-    notification_sender: glib::Sender<NotificationData>,
+    notification_sender: glib::Sender<Notification>,
 ) -> anyhow::Result<()> {
     println!("Done!");
 
