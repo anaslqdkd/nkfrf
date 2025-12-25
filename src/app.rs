@@ -13,7 +13,9 @@ pub struct App{
 pub enum Command{
     ShowPopup(Notification),
     HidePopup(u32),
+    RedrawWindows,
     None,
+    ToggleDoNotDisturb,
 
 }
 impl App {
@@ -32,9 +34,9 @@ impl App {
         match command {
             Command::ShowPopup(notification) => {
                 println!("Creating popup for: {}", notification.summary);
+                let order = self.state.borrow_mut().active_popups_nb();
                 
-                let notif_pop = NotificationPopup::new(notification.clone(), &self.app_gtk);
-                // TODO: change the position of the window if max_active > 1
+                let notif_pop = NotificationPopup::new(notification.clone(), &self.app_gtk, order);
                 let notification_id = notif_pop.notification_id;
                 
                 self.state.borrow_mut().add_active_popup(notif_pop.clone());
@@ -66,7 +68,19 @@ impl App {
                 } else {
                     println!("Popup with ID {} not found", notif_id);
                 }
+                self.handle_message(Message::RedrawWindows);
                 self.handle_message(Message::SendNextNotification);
+            }
+            Command::RedrawWindows => {
+                println!("Redrawing all windows");
+                self.state.borrow_mut().redraw_windows();
+            }
+            Command::ToggleDoNotDisturb => {
+                println!("The command is toggling do not disturb");
+                self.state.borrow_mut().toggle_dnd();
+                self.handle_message(Message::SendNextNotification);
+
+                // self.state.borrow_mut().redraw_windows();
             }
             _ => {
                 println!("Other type of command");

@@ -8,6 +8,8 @@ use std::time::Duration;
 use zbus::Connection;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Proxy, connection, interface, zvariant};
+
+use crate::app_state::Message;
 #[derive(Debug, Clone)]
 pub struct Hints {
     pub urgency: u8,
@@ -26,6 +28,7 @@ pub struct Notification {
 pub enum ServerRequestItem {
     OpenNC,
     CloseNC,
+    ToggleDoNotDisturb,
 }
 // TODO: implement icons from notifications
 #[derive(Debug, Clone)]
@@ -69,6 +72,12 @@ impl NotificationService {
                 Some(Value::U8(u)) => *u,
                 _ => 1,
             },
+            // hint keys: ["urgency", "sender-pid", "desktop-entry", "icon_data"]
+            // ex for discord
+            // sender-pid is the pid of the process sending the notification, can be used to group
+            // notifications by application, app specific rules (ex: show, do not show, etc)
+            // desktop-entry: ex: "discord" etc
+
         };
         let mut duration = 5000;
         if expire_timeout != -1 {
@@ -105,6 +114,11 @@ impl NotificationService {
             .unwrap();
         Ok(())
     }
+    async fn enable_dnd(&self) -> zbus::fdo::Result<()> {
+        println!("Do not disturb is enabled");
+        self.request_sender.send(ServerRequestItem::ToggleDoNotDisturb).unwrap();
+        Ok(())
+    }
 }
 pub async fn run(
     sender: glib::Sender<Notification>,
@@ -135,4 +149,13 @@ pub async fn run(
 
     pending::<()>().await;
     Ok(())
+}
+impl From<ServerRequestItem> for Message {
+    fn from(item: ServerRequestItem) -> Message {
+        match item {
+            ServerRequestItem::OpenNC => Message::ShowNotificationCenter,
+            ServerRequestItem::CloseNC => Message::CloseNotificationCenter,
+            ServerRequestItem::ToggleDoNotDisturb => Message::ToggleDoNotDisturb,
+        }
+    }
 }

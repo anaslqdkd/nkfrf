@@ -1,23 +1,45 @@
+/* Notification window css */
 .container-bg {
-    background-color: #0077B5;
-    padding: 12px;
-	border: 2px solid white;
-    /* border-radius: 10px; */
+    background-color: #000000;
+    padding: 16px;
+    border: 1px solid #ff1493;
 }
+
+.container-bg.urgency-low {
+    border: 1px solid #808080;
+}
+.urgency-low .label-summary {
+    color: #808080;
+}
+
+.container-bg.urgency-normal {
+    border: 1px solid #ff1493;
+}
+.urgency-normal .label-summary {
+    color: #ff1493;
+}
+
+.container-bg.urgency-critical {
+    border: 2px solid #ff0000;
+}
+.urgency-critical .label-summary {
+    color: #ff0000;
+}
+
+.label-body {
+    color: #ffffff;
+    font-size: 13px;
+}
+.label-summary {
+    font-weight: bold;
+    color: #ff1493;
+    font-size: 13px;
+}
+
 .notification-container {
     background-color: #000000;
     padding: 12px;
 	border: 2px solid white;
-    /* border-radius: 10px; */
-}
-.label-body {
-    color: white;
-	font-size: 12px;
-}
-.label-summary {
-    font-weight: bold;
-	color: white;
-	font-size: 12px;
 }
 
 /* Button style */

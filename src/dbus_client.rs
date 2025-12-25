@@ -25,6 +25,10 @@ impl DbusClient {
         self.proxy.call_method("ShowNc", &()).await?;
         Ok(())
     }
+    pub async fn enable_dnd(&self) -> Result<(), anyhow::Error> {
+        self.proxy.call_method("EnableDnd", &()).await?;
+        Ok(())
+    }
     pub async fn close_nc(&self) -> Result<(), anyhow::Error> {
         self.proxy.call_method("CloseNc", &()).await?;
         Ok(())
