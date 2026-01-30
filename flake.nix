@@ -1,37 +1,65 @@
 {
-	description = "Notification Center Hyprland";
+  description = "Notification Center Hyprland";
 
-	inputs = {
-		nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
-	};
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+  };
 
-	outputs = { self, nixpkgs }:
-		let
-		system = "x86_64-linux";
-	pkgs = import nixpkgs { inherit system; };
-	deps = [
-		pkgs.gtk4
-			pkgs.cargo
-			pkgs.rustc
-			pkgs.pkg-config
-			pkgs.libadwaita
-			pkgs.gobject-introspection
-			pkgs.gtk4-layer-shell
-	];
+  outputs = { self, nixpkgs }:
+  let
+    system = "x86_64-linux";
+    pkgs = import nixpkgs { inherit system; };
 
-	typelibPath = "${pkgs.gtk4}/lib/girepository-1.0:" +
-		"${pkgs.libadwaita}/lib/girepository-1.0:" +
-		"${pkgs.gobject-introspection}/lib/girepository-1.0";
-	in
-	{
-		devShells.${system}.default = pkgs.mkShell {
-			buildInputs = deps;
+    rustPlatform = pkgs.rustPlatform;
 
-			shellHook = ''
-				export GI_TYPELIB_PATH=${typelibPath}:$GI_TYPELIB_PATH
-				export LD_LIBRARY_PATH=/home/ash/parser
-				'';
-		};
-	};
+    deps = with pkgs; [
+      gtk4
+      libadwaita
+      gtk4-layer-shell
+      gobject-introspection
+      pkg-config
+    ];
+
+    typelibPath = pkgs.lib.makeSearchPath "lib/girepository-1.0" [
+      pkgs.gtk4
+      pkgs.libadwaita
+      pkgs.gobject-introspection
+    ];
+  in
+  {
+    packages.${system}.default = rustPlatform.buildRustPackage {
+      pname = "nkrfk";
+      version = "0.1.0";
+
+      src = self;
+
+      cargoLock = {
+        lockFile = ./Cargo.lock;
+      };
+
+      nativeBuildInputs = [
+        pkgs.pkg-config
+		 pkgs.makeWrapper
+      ];
+
+      buildInputs = deps;
+
+      postInstall = ''
+        wrapProgram $out/bin/nkfrf \
+          --set GI_TYPELIB_PATH ${typelibPath}
+      '';
+    };
+
+    devShells.${system}.default = pkgs.mkShell {
+      buildInputs = deps ++ [
+        pkgs.cargo
+        pkgs.rustc
+      ];
+
+      shellHook = ''
+        export GI_TYPELIB_PATH=${typelibPath}:$GI_TYPELIB_PATH
+      '';
+    };
+  };
 }
 
