@@ -1,2 +1,6 @@
 debug
 target
+result
+flake.lock
+.direnv
+.envrc
