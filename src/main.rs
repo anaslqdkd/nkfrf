@@ -60,7 +60,10 @@ async fn main() -> Result<(), anyhow::Error> {
     app.connect_activate(move |app| {
         let window = ApplicationWindow::builder().application(app).build();
         let provider = CssProvider::new();
-        provider.load_from_path("style.css");
+        // provider.load_from_path("style.css");
+        static STYLE: &str = include_str!("../style.css");
+        provider.load_from_data(STYLE);
+
         gtk4::style_context_add_provider_for_display(
             &Display::default().expect("Could not connect to a display"),
             &provider,
